@@ -36,7 +36,7 @@ async function generateReply(systemPrompt, conversationHistory, newMessage) {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-lite",
+      model: "gemini-2.0-flash",
       systemInstruction: systemPrompt,
     });
 
