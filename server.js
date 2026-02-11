@@ -146,6 +146,10 @@ app.post("/honey-pot", authMiddleware, async (req, res) => {
         reply: sanitizeReply("sir... ek minute... app slow hai..."),
       });
     }
+
+    console.log(`🎭 Session ${sessionId}: Using persona ${session.personaName}`);
+    console.log(`📊 Session stats: ${session.totalMessagesExchanged} messages, scam detected: ${session.scamDetected}`);
+
     const replyData = await generateReply(
       enhancedSystemPrompt,
       conversationHistory || [],
@@ -157,12 +161,12 @@ app.post("/honey-pot", authMiddleware, async (req, res) => {
 
     const aiReply = replyData.message;
 
-    // Track response history for anti-repetition
+    console.log(`✅ Reply generated: "${aiReply}"`);
+    console.log(`🔢 Fallback index: ${replyData.index}`);
+
+    // Track response history
     if (!session.previousResponses) session.previousResponses = [];
-    session.previousResponses.push({
-      text: aiReply,
-      timestamp: Date.now(),
-    });
+    session.previousResponses.push({ text: aiReply, timestamp: Date.now() });
     if (session.previousResponses.length > 5) {
       session.previousResponses = session.previousResponses.slice(-5);
     }
