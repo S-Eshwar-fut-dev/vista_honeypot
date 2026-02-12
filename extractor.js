@@ -5,7 +5,10 @@
  */
 
 // Regex patterns
+// Format 1: abc3455@bankname (alphanumeric with optional dots/hyphens)
 const UPI_REGEX = /[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}/g;
+// Format 2: scammer.fraud@fakebank (dot-separated names before @)
+const UPI_REGEX_2 = /[a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z][a-zA-Z0-9]*)+@[a-zA-Z]{2,}/g;
 const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 const PHONE_REGEX = /(?:\+91[\s\-]?)?[6-9]\d{9}/g;
 const URL_REGEX = /https?:\/\/[^\s"'<>]+/gi;
@@ -63,9 +66,11 @@ function extractIntelligence(text) {
   const emailMatches = text.match(EMAIL_REGEX) || [];
   const emails = [...new Set(emailMatches.map((e) => e.toLowerCase()))];
 
-  // Extract UPI IDs (filter out emails)
-  const upiMatches = text.match(UPI_REGEX) || [];
-  const upiIds = upiMatches.filter((match) => {
+  // Extract UPI IDs (filter out emails) — combine both formats
+  const upiMatches1 = text.match(UPI_REGEX) || [];
+  const upiMatches2 = text.match(UPI_REGEX_2) || [];
+  const allUpiMatches = [...new Set([...upiMatches1, ...upiMatches2])];
+  const upiIds = allUpiMatches.filter((match) => {
     const lower = match.toLowerCase();
     // If it's already captured as an email, skip it
     if (emails.includes(lower)) return false;
