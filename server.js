@@ -9,7 +9,7 @@ require("dotenv").config();
 
 const express = require("express");
 const { selectPersona, PERSONAS, getEnhancedSystemPrompt } = require("./persona");
-const { extractAdvancedIntelligence, mergeAdvancedIntelligence, getEmptyIntelligence } = require("./advanced-extractor");
+const { extractIntelligence, mergeIntelligence } = require("./extractor");
 const { initGroq, generateReply, classifyScamIntent } = require("./groq");
 const { initRedis, getSession, setSession } = require("./redis");
 const {
@@ -106,16 +106,23 @@ app.post("/honey-pot", authMiddleware, async (req, res) => {
         totalMessagesExchanged: 0,
         lastFallbackIndex: -1,
         previousResponses: [],
-        extractedIntelligence: getEmptyIntelligence(),
+        extractedIntelligence: {
+          emails: [],
+          upiIds: [],
+          phoneNumbers: [],
+          phishingLinks: [],
+          bankAccounts: [],
+          suspiciousKeywords: [],
+        },
         scamDetected: false,
         agentNotes: "",
       };
       console.log(`🎭 New session ${sessionId} → Persona: ${persona.name}`);
     }
 
-    // ── 2. Extract ADVANCED intelligence from incoming message ──
-    const newIntel = extractAdvancedIntelligence(message.text);
-    session.extractedIntelligence = mergeAdvancedIntelligence(
+    // ── 2. Extract intelligence from incoming message ──
+    const newIntel = extractIntelligence(message.text);
+    session.extractedIntelligence = mergeIntelligence(
       session.extractedIntelligence,
       newIntel
     );
@@ -196,32 +203,21 @@ app.post("/honey-pot", authMiddleware, async (req, res) => {
     // ── 5. Update session ──
     session.totalMessagesExchanged += 1;
 
-    // ═══ GENERATE COMPREHENSIVE AGENT NOTES ═══
+    // ═══ GENERATE AGENT NOTES ═══
     const intel = session.extractedIntelligence;
-    const notes = [];
+    const detectedItems = [];
 
-    if (intel.upiIds.length > 0) notes.push(`UPI IDs: ${intel.upiIds.join(", ")}`);
-    if (intel.phoneNumbers.length > 0) notes.push(`Phone: ${intel.phoneNumbers.join(", ")}`);
-    if (intel.emails.length > 0) notes.push(`Emails: ${intel.emails.join(", ")}`);
-    if (intel.bankAccounts.length > 0) notes.push(`Bank accounts: ${intel.bankAccounts.length}`);
-    if (intel.phishingLinks.length > 0) notes.push(`Phishing links: ${intel.phishingLinks.length}`);
-    if (intel.banksImpersonated.length > 0) notes.push(`Impersonating: ${intel.banksImpersonated.join(", ")}`);
-    if (intel.authoritiesImpersonated.length > 0) notes.push(`Fake authority: ${intel.authoritiesImpersonated.join(", ")}`);
-    if (intel.appsRequested.length > 0) notes.push(`Requested apps: ${intel.appsRequested.join(", ")}`);
-    if (intel.moneyAmounts.length > 0) {
-      const amounts = intel.moneyAmounts.map((a) => `₹${a.value}`).join(", ");
-      notes.push(`Money mentioned: ${amounts}`);
-    }
+    if (intel.emails.length > 0) detectedItems.push(`Emails: ${intel.emails.join(", ")}`);
+    if (intel.upiIds.length > 0) detectedItems.push(`UPI IDs: ${intel.upiIds.join(", ")}`);
+    if (intel.phoneNumbers.length > 0) detectedItems.push(`Phone: ${intel.phoneNumbers.join(", ")}`);
+    if (intel.phishingLinks.length > 0) detectedItems.push(`Phishing links: ${intel.phishingLinks.length}`);
+    if (intel.bankAccounts.length > 0) detectedItems.push(`Bank accounts: ${intel.bankAccounts.length}`);
+    if (intel.suspiciousKeywords.length > 0) detectedItems.push(`Keywords: ${intel.suspiciousKeywords.join(", ")}`);
 
-    notes.push(`Scam type: ${intel.scamType}`);
-    notes.push(`Tactic: ${intel.tacticUsed}`);
-    notes.push(`Urgency: ${intel.urgencyLevel}`);
-    notes.push(`Sophistication: ${intel.sophisticationLevel}`);
-    notes.push(`Threat: ${intel.threatType}`);
-    notes.push(`Persona: ${session.personaName}`);
-    notes.push(`Messages: ${session.totalMessagesExchanged}`);
+    detectedItems.push(`Persona: ${session.personaName}`);
+    detectedItems.push(`Messages: ${session.totalMessagesExchanged}`);
 
-    session.agentNotes = notes.join(" | ");
+    session.agentNotes = detectedItems.join(" | ");
 
     // Save session
     await setSession(sessionId, session);
@@ -236,9 +232,7 @@ app.post("/honey-pot", authMiddleware, async (req, res) => {
       session.extractedIntelligence.phoneNumbers.length > 0 ||
       session.extractedIntelligence.emails.length > 0 ||
       session.extractedIntelligence.phishingLinks.length > 0 ||
-      session.extractedIntelligence.bankAccounts.length > 0 ||
-      session.extractedIntelligence.ifscCodes.length > 0 ||
-      session.extractedIntelligence.cryptoWallets.length > 0;
+      session.extractedIntelligence.bankAccounts.length > 0;
 
     const shouldTriggerCallback =
       session.scamDetected &&
@@ -313,16 +307,13 @@ app.get("/analytics/:sessionId", authMiddleware, async (req, res) => {
 
     const intel = session.extractedIntelligence;
 
-    // Calculate engagement quality score
     const engagementScore = Math.min(
       (session.totalMessagesExchanged * 10) +
       (intel.upiIds.length * 50) +
       (intel.phoneNumbers.length * 40) +
       (intel.emails.length * 35) +
       (intel.phishingLinks.length * 30) +
-      (intel.bankAccounts.length * 60) +
-      (intel.ifscCodes.length * 45) +
-      (intel.cryptoWallets.length * 55),
+      (intel.bankAccounts.length * 60),
       1000
     );
 
@@ -330,48 +321,18 @@ app.get("/analytics/:sessionId", authMiddleware, async (req, res) => {
       sessionId: req.params.sessionId,
 
       summary: {
-        scamType: intel.scamType,
-        sophistication: intel.sophisticationLevel,
-        urgencyLevel: intel.urgencyLevel,
-        threatType: intel.threatType,
-        tacticUsed: intel.tacticUsed,
         engagementScore,
         messagesExchanged: session.totalMessagesExchanged,
+        scamDetected: session.scamDetected,
       },
 
       intelligence: {
-        contactInfo: {
-          upiIds: intel.upiIds,
-          phoneNumbers: intel.phoneNumbers,
-          emails: intel.emails,
-        },
-        financial: {
-          bankAccounts: intel.bankAccounts.length,
-          ifscCodes: intel.ifscCodes,
-          cryptoWallets: intel.cryptoWallets,
-          moneyAmounts: intel.moneyAmounts,
-        },
-        impersonation: {
-          banks: intel.banksImpersonated,
-          authorities: intel.authoritiesImpersonated,
-        },
-        technical: {
-          appsRequested: intel.appsRequested,
-          phishingLinks: intel.phishingLinks.length,
-          transactionIds: intel.transactionIds,
-          orderIds: intel.orderIds,
-        },
-      },
-
-      behavior: {
-        credibilityMarkers: intel.credibilityMarkers,
+        emails: intel.emails,
+        upiIds: intel.upiIds,
+        phoneNumbers: intel.phoneNumbers,
+        phishingLinks: intel.phishingLinks,
+        bankAccounts: intel.bankAccounts,
         suspiciousKeywords: intel.suspiciousKeywords,
-        averageMessageLength:
-          session.totalMessagesExchanged > 0
-            ? Math.round(intel.messageLength / session.totalMessagesExchanged)
-            : 0,
-        containsNumbers: intel.hasNumbers,
-        containsLinks: intel.hasLinks,
       },
 
       engagement: {
