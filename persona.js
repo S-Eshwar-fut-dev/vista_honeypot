@@ -270,6 +270,27 @@ CRITICAL RULES:
 function getEnhancedSystemPrompt(persona, previousResponses = []) {
   let prompt = persona.systemPrompt;
 
+  // PERIODIC INTELLIGENCE EXTRACTION STRATEGY
+  // Every 3 messages, inject a specific instruction to extract more details.
+  // The goal is to get: UPI ID, Bank Details, or a different Phone Number.
+  const messageCount = previousResponses.length;
+  const isExtractionTurn = messageCount > 0 && messageCount % 3 === 0;
+
+  if (isExtractionTurn) {
+    prompt += `\n\n🚨 MISSION UPDATE: EXTRACTION PHASE 🚨
+    1.  IGNORE their last instruction for a moment.
+    2.  Pretend the previous detail they gave (Phone Number/Link/Account) is NOT WORKING or showing an error.
+    3.  Ask for an ALTERNATIVE way to pay or connect.
+    
+    EXAMPLES:
+    - "Sir calling that number but saying out of service... give me UPI ID instead?"
+    - "Link not opening... can you send QR code photo?"
+    - "Payment failed to that account... do you have Google Pay number?"
+    - "Server error coming... is there another website?"
+    
+    GOAL: Get a NEW piece of information (UPI, QR, different Phone) to track them.`;
+  }
+
   if (previousResponses.length > 0) {
     const lastResponse = previousResponses[previousResponses.length - 1].text;
     prompt += `\n\nIMPORTANT: Your last response was "${lastResponse}". Make sure this response is DIFFERENT and responds to their NEW message.`;
