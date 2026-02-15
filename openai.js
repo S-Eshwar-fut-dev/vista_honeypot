@@ -104,7 +104,7 @@ async function generateReply(
         const completion = await openaiClient.chat.completions.create({
             model: "gpt-5-mini",
             messages,
-            temperature: 0.8,
+
             max_completion_tokens: 60,
         }, { signal: controller.signal });
 
@@ -146,7 +146,7 @@ async function generateReply(
                     },
                     { role: "user", content: newMessage },
                 ],
-                temperature: 0.8,
+
                 max_completion_tokens: 30,
             }, { signal: recoveryController.signal });
 
@@ -191,7 +191,7 @@ async function classifyScamIntent(conversationHistory, latestMessage) {
                 },
                 { role: "user", content: prompt },
             ],
-            temperature: 0,
+
             max_completion_tokens: 8,
         }, { signal: classifyController.signal });
 
