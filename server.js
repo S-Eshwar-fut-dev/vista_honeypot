@@ -10,7 +10,7 @@ require("dotenv").config();
 const express = require("express");
 const { selectPersona, PERSONAS, getEnhancedSystemPrompt } = require("./persona");
 const { extractIntelligence, mergeIntelligence } = require("./extractor");
-const { initGroq, generateReply, classifyScamIntent } = require("./groq");
+const { initOpenAI, generateReply, classifyScamIntent } = require("./openai");
 const { initRedis, getSession, setSession } = require("./redis");
 const {
   calculateRealisticDelay,
@@ -433,7 +433,7 @@ app.use((err, req, res, next) => {
 async function startServer() {
   try {
     // Initialize services
-    initGroq();
+    initOpenAI();
     await initRedis();
 
     if (require.main === module) {
